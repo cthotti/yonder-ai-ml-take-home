@@ -19,6 +19,7 @@ OUT = ROOT / "data_stress"
 MODELS = {
     "baseline": ROOT / "runs" / "baseline" / "weights" / "best.pt",
     "aug": ROOT / "runs" / "aug" / "weights" / "best.pt",
+    "aug_v2": ROOT / "runs" / "aug_v2" / "weights" / "best.pt",
 }
 
 
