@@ -5,3 +5,12 @@ data/
 /.venv
 /sampled
 Sampled-YD-Object-Detection-*/
+yolov8n.pt
+data_aug/
+data_base/
+data_stress/
+runs/
+yolov8n.pt
+.venv/
+*.cache
+.DS_Store

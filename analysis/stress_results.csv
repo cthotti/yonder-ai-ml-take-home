@@ -1,0 +1,13 @@
+condition,model,mAP50,mAP50-95,R_bottle,R_mallet
+clean,baseline,0.918,0.612,0.788,0.972
+clean,aug,0.916,0.606,0.821,0.931
+blur,baseline,0.777,0.403,0.631,0.802
+blur,aug,0.913,0.595,0.764,0.938
+dark,baseline,0.885,0.559,0.735,0.911
+dark,aug,0.896,0.571,0.76,0.915
+low_contrast,baseline,0.906,0.581,0.762,0.934
+low_contrast,aug,0.917,0.585,0.785,0.925
+noise,baseline,0.769,0.445,0.531,0.84
+noise,aug,0.871,0.545,0.68,0.887
+grayscale,baseline,0.397,0.23,0.662,0.102
+grayscale,aug,0.399,0.223,0.623,0.132
