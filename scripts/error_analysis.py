@@ -1,8 +1,8 @@
-"""Find the model's mistakes on a split: false positives, false negatives and low-confidence hits.
-Run on valid for the error analysis, and on train for hard example mining."""
+"""Find the model's mistakes on the validation set: false positives and missed objects.
+Saves every image with a mistake (green = correct, red = false positive, yellow = missed)."""
 import argparse
 import csv
-from collections import Counter, defaultdict
+from collections import Counter
 from pathlib import Path
 
 import cv2
@@ -52,16 +52,6 @@ def match(gts, preds, thr):
     return tps, fps, fns
 
 
-def on_other_class(fp, gts, thr):
-    # an FP sitting on the other class's box is a confusion, not a background hit
-    return any(gcls != fp[0] and iou(fp[1], gbox) >= thr for gcls, gbox in gts)
-
-
-def aug_tag(stem):
-    # data_aug names look like <photo>_aug0_blur+gamma; originals have no tag
-    return stem.split("_aug", 1)[1].split("_", 1)[1] if "_aug" in stem else "original"
-
-
 def draw(img, tps, fps, fns, names):
     h, w = img.shape[:2]
 
@@ -81,73 +71,54 @@ def draw(img, tps, fps, fns, names):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--weights", default=str(ROOT / "runs" / "aug_v2" / "weights" / "best.pt"))
-    parser.add_argument("--data", type=Path, default=ROOT / "data_aug")
-    parser.add_argument("--split", default="valid", choices=["valid", "train"])
+    parser.add_argument("--weights", default=str(ROOT / "runs" / "aug_v3" / "weights" / "best.pt"))
+    parser.add_argument("--data", type=Path, default=ROOT / "data_base")
     parser.add_argument("--conf", type=float, default=0.25)
     parser.add_argument("--iou", type=float, default=0.5)
-    parser.add_argument("--imgsz", type=int, default=512)
     args = parser.parse_args()
 
     model = YOLO(args.weights)
     names = model.names
-    img_dir = args.data / args.split / "images"
-    lbl_dir = args.data / args.split / "labels"
-    out = ROOT / "analysis" / f"mistakes_{args.split}"
+    img_dir = args.data / "valid" / "images"
+    lbl_dir = args.data / "valid" / "labels"
+    out = ROOT / "analysis" / "mistakes_valid"
     (out / "images").mkdir(parents=True, exist_ok=True)
 
-    rows, fn_count, fp_count, confused = [], Counter(), Counter(), Counter()
+    rows, missed, false_pos, confused = [], Counter(), Counter(), Counter()
     for path in sorted(p for p in img_dir.iterdir() if p.suffix.lower() in IMG_EXTS):
         img = cv2.imread(str(path))
-        r = model.predict(img, conf=args.conf, imgsz=args.imgsz, verbose=False)[0]
+        r = model.predict(img, conf=args.conf, imgsz=512, verbose=False)[0]
         preds = [(int(c), to_xyxy(*b.tolist()), float(s))
                  for c, b, s in zip(r.boxes.cls, r.boxes.xywhn, r.boxes.conf)]
         gts = load_labels(lbl_dir / f"{path.stem}.txt")
         tps, fps, fns = match(gts, preds, args.iou)
 
         for cls, _ in fns:
-            fn_count[names[cls]] += 1
-        for fp in fps:
-            fp_count[names[fp[0]]] += 1
-            if on_other_class(fp, gts, args.iou):
-                confused[names[fp[0]]] += 1
-
-        # hardness: every mistake counts 1, plus how unsure it was on the boxes it got right
-        min_conf = min((t[2] for t in tps), default=1.0)
-        score = len(fps) + len(fns) + (1 - min_conf)
-        rows.append([path.name, aug_tag(path.stem), len(gts), len(tps), len(fps), len(fns),
-                     round(min_conf, 3), round(score, 3)])
+            missed[names[cls]] += 1
+        for cls, box, _ in fps:
+            false_pos[names[cls]] += 1
+            # a false positive sitting on the other class's object is a mix-up, not background
+            if any(g != cls and iou(box, gbox) >= args.iou for g, gbox in gts):
+                confused[names[cls]] += 1
 
         if fps or fns:
+            rows.append([path.name, len(gts), len(tps), len(fps), len(fns)])
             cv2.imwrite(str(out / "images" / path.name), draw(img, tps, fps, fns, names))
 
-    rows.sort(key=lambda r: -r[-1])
+    rows.sort(key=lambda r: -(r[3] + r[4]))
     with open(out / "mistakes.csv", "w", newline="") as f:
         writer = csv.writer(f)
-        writer.writerow(["image", "aug", "n_gt", "tp", "fp", "fn", "min_tp_conf", "hardness"])
+        writer.writerow(["image", "objects", "correct", "false_pos", "missed"])
         writer.writerows(rows)
 
-    print(f"\n{args.split}: {len(rows)} images, conf >= {args.conf}, IoU >= {args.iou}")
-    print("false negatives by class:", dict(fn_count))
-    print("false positives by class:", dict(fp_count), " on the other class's box:", dict(confused))
-    print(f"images with a mistake: {sum(r[4] + r[5] > 0 for r in rows)}")
-
-    print("\nhardest images:")
+    print(f"\nconf >= {args.conf}, IoU >= {args.iou}")
+    print("missed by class:", dict(missed))
+    print("false positives by class:", dict(false_pos), " on the other class's object:", dict(confused))
+    print(f"images with a mistake: {len(rows)}")
+    print("\nimages with the most mistakes:")
     for r in rows[:10]:
-        print(f"  {r[-1]:5.2f}  fp={r[4]} fn={r[5]} min_conf={r[6]:.2f}  {r[0]}")
-
-    # which conditions the model struggles with most (useful on the train split)
-    by_tag = defaultdict(list)
-    for r in rows:
-        for tag in r[1].split("+"):
-            by_tag[tag].append(r)
-    if len(by_tag) > 1:
-        print(f"\n{'condition':<14} {'images':>6} {'error rate':>10} {'mean hardness':>14}")
-        for tag, rs in sorted(by_tag.items(), key=lambda kv: -np.mean([r[-1] for r in kv[1]])):
-            err = np.mean([r[4] + r[5] > 0 for r in rs])
-            print(f"{tag:<14} {len(rs):>6} {err:>10.3f} {np.mean([r[-1] for r in rs]):>14.3f}")
-
-    print(f"\nAnnotated mistakes and mistakes.csv in {out}")
+        print(f"  fp={r[3]} missed={r[4]}  {r[0]}")
+    print(f"\nSaved to {out}")
 
 
 if __name__ == "__main__":
