@@ -3,6 +3,7 @@ Raw frames go to <out>/raw so predict.py can be run on them afterwards."""
 import argparse
 import time
 from pathlib import Path
+
 import cv2
 from ultralytics import YOLO
 

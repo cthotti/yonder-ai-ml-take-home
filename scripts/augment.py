@@ -62,6 +62,35 @@ def augment(img):
         img = fn(img)
     return img, [fn.__name__ for fn in picked]
 
+def read_boxes(label_path, margin=0.02):
+    # labeled boxes as x1, y1, x2, y2 (normalized), padded so crops stay clear of objects
+    boxes = []
+    if label_path.exists():
+        for line in label_path.read_text().splitlines():
+            p = line.split()
+            if len(p) == 5:
+                x, y, w, h = map(float, p[1:])
+                boxes.append((x - w / 2 - margin, y - h / 2 - margin, x + w / 2 + margin, y + h / 2 + margin))
+    return boxes
+
+
+def overlaps(a, b):
+    return a[0] < b[2] and b[0] < a[2] and a[1] < b[3] and b[1] < a[3]
+
+
+def background_crop(img, boxes, tries=50):
+    # cut a square that doesn't touch any object, scaled back to full size
+    h, w = img.shape[:2]
+    for _ in range(tries):
+        size = int(random.uniform(0.4, 0.7) * min(h, w))
+        x, y = random.randint(0, w - size), random.randint(0, h - size)
+        crop = (x / w, y / h, (x + size) / w, (y + size) / h)
+        if not any(overlaps(crop, b) for b in boxes):
+            return cv2.resize(img[y:y + size, x:x + size], (w, h))
+    return None
+
+
+
 
 def main():
     ap = argparse.ArgumentParser()
@@ -69,6 +98,7 @@ def main():
     ap.add_argument("--out", type=Path, default=ROOT / "data_aug")
     ap.add_argument("--copies", type=int, default=1, help="augmented variants per train image")
     ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--backgrounds", type=int, default=0, help="object-free crops to add")
     args = ap.parse_args()
 
     random.seed(args.seed)
@@ -104,6 +134,23 @@ def main():
             if lbl_path.exists():
                 shutil.copy(lbl_path, lbl_out / f"{stem}.txt")
             made += 1
+    
+    # backgrounds: object-free crops of the original photos, with empty label files
+    train_imgs = sorted((args.src / "train" / "images").iterdir())
+    added = 0
+    for img_path in random.sample(train_imgs, len(train_imgs)):
+        if added == args.backgrounds:
+            break
+        img = cv2.imread(str(img_path))
+        if img is None:
+            continue
+        crop = background_crop(img, read_boxes(args.src / "train" / "labels" / f"{img_path.stem}.txt"))
+        if crop is None:
+            continue
+        cv2.imwrite(str(img_out / f"{img_path.stem}_bg.jpg"), crop)
+        (lbl_out / f"{img_path.stem}_bg.txt").write_text("")
+        added += 1
+    print(f"Added {added} background crops")
 
     names = yaml.safe_load((args.src / "data.yaml").read_text())["names"]
     data = {

@@ -1,0 +1,7 @@
+path: /Users/chetant/Desktop/ai-ml-take-home/data_aug_v3
+train: train/images
+val: valid/images
+nc: 2
+names:
+- bottle
+- mallet
