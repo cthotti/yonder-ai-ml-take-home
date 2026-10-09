@@ -3,7 +3,7 @@ CPU timing here is a stand-in for the rover; real NPU (RKNN) numbers will differ
 import argparse
 import csv
 from pathlib import Path
-
+import shutil
 import numpy as np
 import yaml
 from ultralytics import YOLO
@@ -52,6 +52,11 @@ def main():
     onnx_path = YOLO(str(args.weights)).export(format="onnx", imgsz=512)
     ov_fp32 = YOLO(str(args.weights)).export(format="openvino", imgsz=512)
     ov_int8 = YOLO(str(args.weights)).export(format="openvino", imgsz=512, int8=True, data=str(calib))
+    
+    # separate copy so the 416 export doesn't overwrite the 512 one
+    w416 = args.weights.with_name("best_416.pt")
+    shutil.copy(args.weights, w416)
+    ov_int8_416 = YOLO(str(w416)).export(format="openvino", imgsz=416, int8=True, data=str(calib))
 
     images = sorted((ROOT / "data_base" / "valid" / "images").iterdir())[:50]
     variants = [
@@ -61,6 +66,7 @@ def main():
         ("onnx fp32 512", onnx_path, 512),
         ("openvino fp32 512", ov_fp32, 512),
         ("openvino int8 512", ov_int8, 512),
+        ("openvino int8 416", ov_int8_416, 416),
     ]
     rows = [evaluate(name, path, imgsz, images) for name, path, imgsz in variants]
 
