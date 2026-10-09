@@ -168,6 +168,12 @@ I ran `error_analysis.py` again on the final model to see what was left. On vali
 - **Some "misses" are really loose boxes.** When the same object has both a red and a yellow box, the model found it but its box overlapped the label by less than 50%.
 - **Rocks:** in the first error analysis (step 5), rocks on dirt were the most common false positive, which is why the background images were added. The rise in bottle precision suggests fewer of those now, though some rocky scenes still produce false boxes.
 
+<img width="448" height="456" alt="CleanShot 2026-10-08 at 21 43 19@2x" src="https://github.com/user-attachments/assets/73f0f0c6-38fd-4d4e-80f9-3e235348f2c0" />
+<img width="454" height="456" alt="CleanShot 2026-10-08 at 21 43 52@2x" src="https://github.com/user-attachments/assets/e275ac2f-ff32-4624-942a-420a578d58a8" />
+<img width="454" height="448" alt="CleanShot 2026-10-08 at 21 44 08@2x" src="https://github.com/user-attachments/assets/1bafefc5-b4a6-4459-9787-950be777d3b8" />
+<img width="904" height="908" alt="CleanShot 2026-10-08 at 21 44 38@2x" src="https://github.com/user-attachments/assets/5f91d922-cbc0-4439-b883-046f3dedf865" />
+
+
 ### 9. Real-world test with a webcam
 
 Instead of recording phone video, I ran the model live on a Logitech webcam and saved individual frames.
