@@ -178,23 +178,31 @@ I didn't have a hammer or other mallet-shaped object, so I couldn't test mallet 
 
 ### 10. Part 2: making the model smaller and faster
 
-Since Yonder Dynamic's real target is an NPU on an OrangePi, not a laptop, so I measured size, accuracy and speed for different versions of the final model. Speed is the median over 50 images on the M2's CPU.
+Since Yonder Dynamics' real target is an NPU on an OrangePi, not a laptop, I measured size, accuracy and speed for different versions of the final model. Speed is the median over 50 images on the M2's CPU.
+
+**Why ExecuTorch.** ExecuTorch is PyTorch's runtime for running models on devices. Instead of shipping all of PyTorch, the model is exported ahead of time with `torch.export` into a fixed graph, handed to a backend (here XNNPACK, a library of optimized CPU kernels for ARM and x86), and saved as a small `.pte` file that a lightweight C++ runtime executes. That's useful for Yonder because the OrangePi also has ARM CPU cores next to the NPU: if a model, or part of one, can't run on the NPU, ExecuTorch with XNNPACK runs the PyTorch-trained model efficiently on the CPU without converting it through another framework.
 
 | version | size | mAP50-95 | mallet recall | CPU time |
 |---|---|---|---|---|
-| PyTorch, 512 px | 6.2 MB | 0.611 | 0.934 | 37.4 ms |
-| PyTorch, 416 px | 6.2 MB | 0.605 | 0.953 | 24.2 ms |
-| PyTorch, 320 px | 6.2 MB | 0.575 | 0.905 | 16.3 ms |
-| OpenVINO, 512 px | 12.3 MB | 0.602 | 0.934 | 17.0 ms |
-| OpenVINO INT8, 512 px | 3.6 MB | 0.591 | 0.947 | 22.2 ms |
-| **OpenVINO INT8, 416 px** | **3.5 MB** | **0.596** | **0.943** | **15.9 ms** |
+| PyTorch, 512 px | 6.2 MB | 0.611 | 0.934 | 34.0 ms |
+| PyTorch, 416 px | 6.2 MB | 0.605 | 0.953 | 24.5 ms |
+| PyTorch, 320 px | 6.2 MB | 0.575 | 0.905 | 16.2 ms |
+| ONNX, 512 px | 12.2 MB | 0.602 | 0.934 | 24.5 ms |
+| OpenVINO, 512 px | 12.3 MB | 0.602 | 0.934 | 18.4 ms |
+| OpenVINO INT8, 512 px | 3.6 MB | 0.592 | 0.947 | 23.1 ms |
+| **OpenVINO INT8, 416 px** | **3.5 MB** | **0.593** | **0.948** | **16.2 ms** |
+| ExecuTorch (XNNPACK), 512 px | 12.2 MB | 0.602 | 0.934 | 27.5 ms |
+| ExecuTorch (XNNPACK), 416 px | 12.2 MB | 0.596 | 0.953 | 19.6 ms |
 
 The model has 3.0M parameters (8.1 GFLOPs).
 
-- **Smaller input images are the easiest speedup.** 416 px is about 35% faster than 512 px with almost no accuracy loss. 320 px starts to hurt, because the objects are already small.
-- **The runtime matters as much as the model.** The exact same model takes 37.4 ms in PyTorch and 17.0 ms in OpenVINO.
+- **Smaller input images are the easiest speedup.** 416 px is about 28% faster than 512 px with almost no accuracy loss. 320 px starts to hurt, because the objects are already small.
+- **The runtime matters as much as the model.** The exact same model takes 34.0 ms in PyTorch, 27.5 ms in ExecuTorch and 18.4 ms in OpenVINO.
+- **ExecuTorch with XNNPACK** gave identical accuracy and was 1.24x faster than PyTorch, with no quantization.
 - **INT8 quantization barely costs accuracy.** I used post-training quantization (OpenVINO + NNCF), calibrated on training images so validation stays unseen. It shrinks the model 3.4x and only lowers mAP50-95 by about 0.01.
-**Recommendation: INT8 at 416 px.** It's the smallest and fastest version, 2.4x faster than the original, for a small accuracy cost.
+- **INT8 was slower than FP32 at 512 px on my Mac.** The M2 CPU has no fast INT8 path in OpenVINO, so it pays for the conversions. The OrangePi's NPU is built for INT8, so the size and accuracy results carry over, but my CPU timings don't.
+
+**Recommendation: INT8 at 416 px.** It's the smallest and fastest version, 2.1x faster than the original, for a small accuracy cost.
 
 ## YOLO settings and why
 

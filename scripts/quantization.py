@@ -57,6 +57,9 @@ def main():
     w416 = args.weights.with_name("best_416.pt")
     shutil.copy(args.weights, w416)
     ov_int8_416 = YOLO(str(w416)).export(format="openvino", imgsz=416, int8=True, data=str(calib))
+    
+    et_512 = YOLO(str(args.weights)).export(format="executorch", imgsz=512)
+    et_416 = YOLO(str(w416)).export(format="executorch", imgsz=416)
 
     images = sorted((ROOT / "data_base" / "valid" / "images").iterdir())[:50]
     variants = [
@@ -67,6 +70,8 @@ def main():
         ("openvino fp32 512", ov_fp32, 512),
         ("openvino int8 512", ov_int8, 512),
         ("openvino int8 416", ov_int8_416, 416),
+        ("executorch fp32 512", et_512, 512),
+        ("executorch fp32 416", et_416, 416),
     ]
     rows = [evaluate(name, path, imgsz, images) for name, path, imgsz in variants]
 
