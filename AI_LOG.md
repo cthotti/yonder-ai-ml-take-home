@@ -1,6 +1,6 @@
 # AI Usage Log
 
-I used Claude for most of the code. My workflow is decide what to try from the data or the latest results, ask Claude to write the script, then read it, run it and check the output.
+I used Claude for most of the code. My workflow is decide what to try from the data or the latest results, ask Claude to write the script, then read it, run it, check the output, and validate with tests.
 
 ## 1. Augmentation script
 
