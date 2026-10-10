@@ -242,3 +242,4 @@ I report precision, recall, mAP50 and mAP50-95 for each class instead of accurac
 - The stress test uses the same kinds of corruption the model was trained on.
 - The real-world test was indoors, small, and had no mallet stand-in.
 - The augmented models were still improving slowly at epoch 40, so longer training might help.
+- If your MacBook isn't connected to a power source while training or running inference, or is in low battery mode, then the results may vary. 
